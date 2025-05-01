@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Word Search Book Generator</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }
+    .container { display: flex; gap: 20px; }
+    #input-panel { flex: 1; }
+    #preview-panel { flex: 2; }
+    textarea, input { width: 100%; margin-bottom: 10px; }
+    button { padding: 10px 15px; cursor: pointer; }
+    #pdf-preview { border: 1px solid #ddd; min-height: 500px; }
+  </style>
+</head>
+<body>
+  <h1>Word Search Book Generator</h1>
+  <div class="container">
+    <div id="input-panel">
+      <h2>Settings</h2>
+      <input type="text" id="theme" placeholder="Theme (e.g., Space)">
+      <textarea id="words" placeholder="Enter words (comma or newline separated)"></textarea>
+      <input type="text" id="secret-word" placeholder="Hidden word (optional)">
+      <textarea id="fun-fact" placeholder="Fun fact (optional)"></textarea>
+      
+      <label>Grid Size: 
+        <input type="range" id="grid-size" min="10" max="25" value="15">
+        <span id="grid-size-value">15x15</span>
+      </label>
+      
+      <button id="generate-btn">Generate PDF</button>
+      <button id="add-to-book">Add to Book</button>
+      <button id="export-book">Export Full Book</button>
+    </div>
+    
+    <div id="preview-panel">
+      <h2>Preview</h2>
+      <div id="pdf-preview"></div>
+    </div>
+  </div>
+
+  <!-- Load Pyodide -->
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"></script>
+  <script>
+    let pythonInitialized = false;
+    let generatedPages = [];
+    
+    // Initialize Pyodide
+    async function initializePyodide() {
+      let pyodide = await loadPyodide({
+        indexURL: "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/"
+      });
+      await pyodide.loadPackage("numpy");
+      await pyodide.loadPackage("reportlab");
+      return pyodide;
+    }
+    
+    // Run when page loads
+    (async function() {
+      const pyodide = await initializePyodide();
+      pythonInitialized = true;
+      
+      // Inject Python code
+      await pyodide.runPython(`
+        import numpy as np
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib.units import inch
+        from io import BytesIO
+        import base64
+        import random
+        
+        def generate_word_search(words, grid_size=15, secret_word="", theme="", fun_fact=""):
+            # [Previous Python code here - use the last working version]
+            # ... (include all the WordSearchGenerator class code)
+            return pdf_bytes
+      `);
+      
+      // Set up UI events
+      document.getElementById("grid-size").addEventListener("input", (e) => {
+        document.getElementById("grid-size-value").textContent = `${e.target.value}x${e.target.value}`;
+      });
+      
+      document.getElementById("generate-btn").addEventListener("click", async () => {
+        if (!pythonInitialized) return;
+        
+        const theme = document.getElementById("theme").value;
+        const words = document.getElementById("words").value.split(/[,\n]/).map(w => w.trim()).filter(w => w);
+        const secret_word = document.getElementById("secret-word").value;
+        const fun_fact = document.getElementById("fun-fact").value;
+        const grid_size = parseInt(document.getElementById("grid-size").value);
+        
+        const pdf_bytes = await pyodide.runPythonAsync(`
+          generate_word_search(
+            words=${JSON.stringify(words)},
+            grid_size=${grid_size},
+            secret_word="${secret_word}",
+            theme="${theme}",
+            fun_fact="${fun_fact}"
+          )
+        `);
+        
+        // Display PDF preview
+        const blob = new Blob([pdf_bytes], { type: "application/pdf" });
+        const url = URL.createObjectURL(blob);
+        document.getElementById("pdf-preview").innerHTML = `
+          <embed src="${url}" width="100%" height="500px" type="application/pdf">
+        `;
+      });
+    })();
+  </script>
+</body>
+</html>

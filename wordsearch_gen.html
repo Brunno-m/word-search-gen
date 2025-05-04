@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Word Search Book Generator</title>
+  <style>
+    :root {
+      --primary: #4361ee;
+      --secondary: #3f37c9;
+      --light: #f8f9fa;
+      --dark: #212529;
+    }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      line-height: 1.6;
+      color: var(--dark);
+      background-color: #f5f7fa;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 2fr;
+      gap: 30px;
+    }
+    .panel {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      padding: 25px;
+    }
+    h1 {
+      color: var(--primary);
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    h2 {
+      color: var(--secondary);
+      margin-top: 0;
+      border-bottom: 2px solid var(--light);
+      padding-bottom: 10px;
+    }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 500;
+    }
+    input[type="text"], textarea, select {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 15px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 16px;
+    }
+    textarea {
+      min-height: 100px;
+      resize: vertical;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    .range-container {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+    input[type="range"] {
+      flex-grow: 1;
+    }
+    .btn {
+      background-color: var(--primary);
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: background-color 0.3s;
+      margin-right: 10px;
+      margin-bottom: 10px;
+    }
+    .btn:hover {
+      background-color: var(--secondary);
+    }
+    .btn-secondary {
+      background-color: #6c757d;
+    }
+    .btn-secondary:hover {
+      background-color: #5a6268;
+    }
+    #pdf-preview {
+      width: 100%;
+      height: 600px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      background: white;
+    }
+    .loading {
+      display: none;
+      text-align: center;
+      padding: 20px;
+      color: var(--primary);
+    }
+    .book-controls {
+      margin-top: 20px;
+      border-top: 1px solid #eee;
+      padding-top: 20px;
+    }
+    @media (max-width: 768px) {
+      .container {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Word Search Book Generator</h1>
+  
+  <div class="container">
+    <div class="panel" id="input-panel">
+      <h2>Settings</h2>
+      
+      <div class="form-group">
+        <label for="theme">Theme</label>
+        <input type="text" id="theme" placeholder="e.g., Space, Ocean, Animals">
+      </div>
+      
+      <div class="form-group">
+        <label for="words">Words to Find</label>
+        <textarea id="words" placeholder="Enter words separated by commas or new lines"></textarea>
+      </div>
+      
+      <div class="form-group">
+        <label for="secret-word">Hidden Bonus Word (optional)</label>
+        <input type="text" id="secret-word" placeholder="Will be hidden in the puzzle">
+      </div>
+      
+      <div class="form-group">
+        <label for="fun-fact">Fun Fact (optional)</label>
+        <textarea id="fun-fact" placeholder="Interesting fact about your theme"></textarea>
+      </div>
+      
+      <div class="form-group">
+        <label>Grid Size</label>
+        <div class="range-container">
+          <input type="range" id="grid-size" min="10" max="25" value="15">
+          <span id="grid-size-value">15x15</span>
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label>Difficulty</label>
+        <select id="difficulty">
+          <option value="easy">Easy (forward only)</option>
+          <option value="medium" selected>Medium (forward, backward)</option>
+          <option value="hard">Hard (all directions)</option>
+        </select>
+      </div>
+      
+      <button id="generate-btn" class="btn">Generate PDF</button>
+      <button id="download-btn" class="btn btn-secondary" disabled>Download PDF</button>
+      
+      <div class="book-controls">
+        <h3>Book Compilation</h3>
+        <button id="add-to-book" class="btn">Add to Book</button>
+        <button id="export-book" class="btn btn-secondary" disabled>Export Full Book</button>
+        <div id="book-count">0 puzzles in book</div>
+      </div>
+    </div>
+    
+    <div class="panel" id="preview-panel">
+      <h2>Preview</h2>
+      <div class="loading" id="loading">Generating puzzle...</div>
+      <div id="pdf-preview"></div>
+    </div>
+  </div>
+
+  <!-- PDF Generation Library -->
+  <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  <script src="https://unpkg.com/downloadjs@1.4.7"></script>
+  
+  <script>
+    // Configuration
+    const config = {
+      gridSizes: {
+        small: 10,
+        medium: 15,
+        large: 20,
+        xlarge: 25
+      },
+      directions: {
+        easy: [[0, 1], [1, 0]], // right, down
+        medium: [[0, 1], [1, 0], [0, -1], [-1, 0]], // + left, up
+        hard: [[0, 1], [1, 0], [0, -1], [-1, 0], [1, 1], [1, -1], [-1, 1], [-1, -1]] // + diagonals
+      }
+    };
+
+    // State
+    const state = {
+      currentPdf: null,
+      bookPuzzles: [],
+      isLoading: false
+    };
+
+    // DOM Elements
+    const elements = {
+      theme: document.getElementById('theme'),
+      words: document.getElementById('words'),
+      secretWord: document.getElementById('secret-word'),
+      funFact: document.getElementById('fun-fact'),
+      gridSize: document.getElementById('grid-size'),
+      gridSizeValue: document.getElementById('grid-size-value'),
+      difficulty: document.getElementById('difficulty'),
+      generateBtn: document.getElementById('generate-btn'),
+      downloadBtn: document.getElementById('download-btn'),
+      addToBook: document.getElementById('add-to-book'),
+      exportBook: document.getElementById('export-book'),
+      bookCount: document.getElementById('book-count'),
+      loading: document.getElementById('loading'),
+      pdfPreview: document.getElementById('pdf-preview')
+    };
+
+    // Event Listeners
+    elements.gridSize.addEventListener('input', updateGridSizeDisplay);
+    elements.generateBtn.addEventListener('click', generatePuzzle);
+    elements.downloadBtn.addEventListener('click', downloadPdf);
+    elements.addToBook.addEventListener('click', addToBook);
+    elements.exportBook.addEventListener('click', exportBook);
+
+    // Initialize
+    updateGridSizeDisplay();
+
+    // Functions
+    function updateGridSizeDisplay() {
+      const size = elements.gridSize.value;
+      elements.gridSizeValue.textContent = `${size}x${size}`;
+    }
+
+    async function generatePuzzle() {
+      try {
+        state.isLoading = true;
+        showLoading(true);
+        
+        // Get input values
+        const theme = elements.theme.value.trim() || 'Word Search';
+        const words = elements.words.value
+          .split(/[\n,]/)
+          .map(word => word.trim().toUpperCase())
+          .filter(word => word.length > 0);
+        
+        const secretWord = elements.secretWord.value.trim().toUpperCase();
+        const funFact = elements.funFact.value.trim();
+        const gridSize = parseInt(elements.gridSize.value);
+        const difficulty = elements.difficulty.value;
+        
+        // Validate input
+        if (words.length === 0) {
+          alert('Please enter at least one word');
+          return;
+        }
+        
+        // Generate the puzzle
+        const puzzle = await createWordSearch(
+          words, 
+          gridSize, 
+          config.directions[difficulty],
+          secretWord
+        );
+        
+        // Generate PDF
+        const pdfBytes = await generatePdf(
+          puzzle.grid, 
+          words, 
+          theme, 
+          secretWord, 
+          funFact
+        );
+        
+        // Update state
+        state.currentPdf = pdfBytes;
+        elements.downloadBtn.disabled = false;
+        
+        // Show preview
+        showPdfPreview(pdfBytes);
+        
+      } catch (error) {
+        console.error('Error generating puzzle:', error);
+        alert('An error occurred while generating the puzzle');
+      } finally {
+        state.isLoading = false;
+        showLoading(false);
+      }
+    }
+
+    async function createWordSearch(words, size, directions, secretWord = '') {
+      // Initialize grid
+      const grid = Array(size).fill().map(() => Array(size).fill(''));
+      
+      // Place words
+      const placedWords = [];
+      const allWords = secretWord ? [...words, secretWord] : [...words];
+      
+      for (const word of allWords) {
+        if (word.length > size) continue; // Skip words that are too long
+        
+        let placed = false;
+        for (let attempt = 0; attempt < 100; attempt++) {
+          const [dx, dy] = directions[Math.floor(Math.random() * directions.length)];
+          const x = Math.floor(Math.random() * size);
+          const y = Math.floor(Math.random() * size);
+          
+          // Check if word fits
+          const endX = x + (word.length - 1) * dx;
+          const endY = y + (word.length - 1) * dy;
+          if (endX < 0 || endX >= size || endY < 0 || endY >= size) continue;
+          
+          // Check for conflicts
+          let canPlace = true;
+          for (let i = 0; i < word.length; i++) {
+            const char = word[i];
+            const gridChar = grid[x + i * dx][y + i * dy];
+            if (gridChar !== '' && gridChar !== char) {
+              canPlace = false;
+              break;
+            }
+          }
+          
+          if (canPlace) {
+            // Place the word
+            for (let i = 0; i < word.length; i++) {
+              grid[x + i * dx][y + i * dy] = word[i];
+            }
+            placedWords.push(word);
+            placed = true;
+            break;
+          }
+        }
+        
+        if (!placed) {
+          console.warn(`Could not place word: ${word}`);
+        }
+      }
+      
+      // Fill empty spaces with random letters
+      const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      for (let i = 0; i < size; i++) {
+        for (let j = 0; j < size; j++) {
+          if (grid[i][j] === '') {
+            grid[i][j] = letters[Math.floor(Math.random() * letters.length)];
+          }
+        }
+      }
+      
+      return {
+        grid,
+        words: placedWords,
+        size,
+        secretWord
+      };
+    }
+
+    async function generatePdf(grid, wordList, theme, secretWord, funFact) {
+      const { PDFDocument, rgb } = PDFLib;
+      
+      // Create a new PDF document
+      const pdfDoc = await PDFDocument.create();
+      const page = pdfDoc.addPage([612, 792]); // Letter size (8.5x11 inches)
+      
+      // Set up fonts
+      const font = await pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica);
+      const boldFont = await pdfDoc.embedFont(PDFLib.StandardFonts.HelveticaBold);
+      
+      // Draw title
+      page.drawText(theme, {
+        x: 50,
+        y: 750,
+        size: 24,
+        font: boldFont,
+        color: rgb(0, 0, 0.5)
+      });
+      
+      // Draw grid
+      const gridSize = grid.length;
+      const cellSize = 15;
+      const gridWidth = gridSize * cellSize;
+      const gridX = (page.getWidth() - gridWidth) / 2;
+      const gridY = 600;
+      
+      for (let i = 0; i < gridSize; i++) {
+        for (let j = 0; j < gridSize; j++) {
+          const x = gridX + j * cellSize;
+          const y = gridY - i * cellSize;
+          
+          // Draw cell border
+          page.drawRectangle({
+            x,
+            y: y - cellSize,
+            width: cellSize,
+            height: cellSize,
+            borderWidth: 0.5,
+            borderColor: rgb(0.8, 0.8, 0.8),
+            color: rgb(1, 1, 1)
+          });
+          
+          // Draw letter
+          page.drawText(grid[i][j], {
+            x: x + cellSize/2 - 3,
+            y: y - cellSize/2 - 5,
+            size: 12,
+            font
+          });
+        }
+      }
+      
+      // Draw word list
+      let yPos = 450;
+      page.drawText('Find these words:', {
+        x: 50,
+        y: yPos,
+        size: 14,
+        font: boldFont
+      });
+      yPos -= 20;
+      
+      // Split word list into 3 columns
+      const wordsPerColumn = Math.ceil(wordList.length / 3);
+      for (let i = 0; i < wordList.length; i++) {
+        const col = Math.floor(i / wordsPerColumn);
+        const row = i % wordsPerColumn;
+        page.drawText(wordList[i], {
+          x: 50 + col * 180,
+          y: yPos - row * 18,
+          size: 12,
+          font
+        });
+      }
+      
+      // Draw secret word hint
+      if (secretWord) {
+        yPos -= (wordsPerColumn * 18) + 30;
+        page.drawText('Bonus: Find the hidden word in leftover letters!', {
+          x: 50,
+          y: yPos,
+          size: 12,
+          font: boldFont,
+          color: rgb(0.5, 0, 0)
+        });
+      }
+      
+      // Draw fun fact
+      if (funFact) {
+        yPos -= 30;
+        page.drawText(`Fun Fact: ${funFact}`, {
+          x: 50,
+          y: yPos,
+          size: 11,
+          font,
+          color: rgb(0.3, 0.3, 0.3)
+        });
+      }
+      
+      // Return the PDF as bytes
+      return await pdfDoc.save();
+    }
+
+    function showPdfPreview(pdfBytes) {
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      elements.pdfPreview.innerHTML = `
+        <embed src="${url}" type="application/pdf" width="100%" height="100%">
+      `;
+    }
+
+    function downloadPdf() {
+      if (state.currentPdf) {
+        download(state.currentPdf, "wordsearch.pdf", "application/pdf");
+      }
+    }
+
+    function addToBook() {
+      if (state.currentPdf) {
+        state.bookPuzzles.push(state.currentPdf);
+        updateBookCount();
+        elements.exportBook.disabled = false;
+        alert('Puzzle added to your book!');
+      }
+    }
+
+    async function exportBook() {
+      if (state.bookPuzzles.length === 0) return;
+      
+      try {
+        showLoading(true);
+        const { PDFDocument } = PDFLib;
+        
+        // Create a new document for the book
+        const bookDoc = await PDFDocument.create();
+        
+        // Merge all puzzles
+        for (const pdfBytes of state.bookPuzzles) {
+          const pdfDoc = await PDFDocument.load(pdfBytes);
+          const pages = await bookDoc.copyPages(pdfDoc, pdfDoc.getPageIndices());
+          pages.forEach(page => bookDoc.addPage(page));
+        }
+        
+        // Save and download
+        const bookBytes = await bookDoc.save();
+        download(bookBytes, "wordsearch-book.pdf", "application/pdf");
+        
+      } catch (error) {
+        console.error('Error creating book:', error);
+        alert('An error occurred while creating the book');
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    function updateBookCount() {
+      const count = state.bookPuzzles.length;
+      elements.bookCount.textContent = `${count} puzzle${count !== 1 ? 's' : ''} in book`;
+    }
+
+    function showLoading(show) {
+      elements.loading.style.display = show ? 'block' : 'none';
+      elements.pdfPreview.style.display = show ? 'none' : 'block';
+      elements.generateBtn.disabled = show;
+    }
+  </script>
+</body>
+</html>
